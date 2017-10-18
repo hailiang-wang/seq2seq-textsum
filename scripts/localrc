@@ -1,0 +1,2 @@
+# local python2 and tensorflow 1.0.0
+source venv-py2_tf1.0.0/bin/activate
