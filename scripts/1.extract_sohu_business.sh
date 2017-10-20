@@ -13,4 +13,4 @@ cd $baseDir/../src
 if [ -f $baseDir/../tmp/business.sohu.com.raw.txt ]; then
     rm $baseDir/../tmp/business.sohu.com.raw.txt
 fi
-python data_processer.py Test.test_sohu_business
+python data_processer.py Test.test_extract_sohu_business_raw_txt

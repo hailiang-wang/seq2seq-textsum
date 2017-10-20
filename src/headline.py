@@ -26,7 +26,7 @@ sys.path.append(parent_dir)
 #from textsum import seq2seq_model # absolute import
 
 import data_utils
-import seq2seq_model
+import seq2seq_model_attn as seq2seq_model
 
 file_path = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(file_path, "news")
@@ -124,46 +124,49 @@ def create_model(session, forward_only):
   """Create headline model and initialize or load parameters in session."""
   # dtype = tf.float16 if FLAGS.use_fp16 else tf.float32
   # dtype = tf.float32
-  initializer = tf.random_uniform_initializer(-config.init_scale, config.init_scale)
-  # Adding unique variable scope to model
-  with tf.variable_scope(FLAGS.headline_scope_name, reuse=None, initializer=initializer):
-    model = seq2seq_model.Seq2SeqModel(
-        FLAGS.vocab_size,
-        FLAGS.vocab_size,
-        buckets,
-        FLAGS.size,
-        FLAGS.num_layers,
-        FLAGS.max_gradient_norm,
-        FLAGS.batch_size,
-        FLAGS.learning_rate,
-        FLAGS.learning_rate_decay_factor,
-        use_lstm = True, # LSTM instend of GRU
-        num_samples = FLAGS.num_samples,
-        forward_only=forward_only)
+  with tf.device("/gpu:0"):
+      initializer = tf.random_uniform_initializer(-config.init_scale, config.init_scale)
+      # Adding unique variable scope to model
+      with tf.variable_scope(FLAGS.headline_scope_name, reuse=None, initializer=initializer):
+        model = seq2seq_model.Seq2SeqModel(
+            FLAGS.vocab_size,
+            FLAGS.vocab_size,
+            buckets,
+            FLAGS.size,
+            FLAGS.num_layers,
+            FLAGS.max_gradient_norm,
+            FLAGS.batch_size,
+            FLAGS.learning_rate,
+            FLAGS.learning_rate_decay_factor,
+            use_lstm = True, # LSTM instend of GRU
+            num_samples = FLAGS.num_samples,
+            forward_only=forward_only)
   
-  ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
-  if ckpt:
-    model_checkpoint_path = ckpt.model_checkpoint_path
-    print("Reading model parameters from %s" % model_checkpoint_path)
-    saver = tf.train.Saver()
-    saver.restore(session, tf.train.latest_checkpoint(FLAGS.train_dir))
-  else:
-    print("Created model with fresh parameters.")
-    session.run(tf.global_variables_initializer())
+      ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
+      if ckpt:
+        model_checkpoint_path = ckpt.model_checkpoint_path
+        print("Reading model parameters from %s" % model_checkpoint_path)
+        saver = tf.train.Saver()
+        saver.restore(session, tf.train.latest_checkpoint(FLAGS.train_dir))
+      else:
+        print("Created model with fresh parameters.")
+        session.run(tf.global_variables_initializer())
   
-  return model
+      return model
 
 def train():
   # Prepare Headline data.
   print("Preparing Headline data in %s" % FLAGS.data_dir)
   src_train, dest_train, src_dev, dest_dev, _, _ = data_utils.prepare_headline_data(FLAGS.data_dir, FLAGS.vocab_size)
   
-  # device config for CPU usage
-  config = tf.ConfigProto(device_count={"CPU": 4}, # limit to 4 CPU usage
-                   inter_op_parallelism_threads=1, 
-                   intra_op_parallelism_threads=2) # n threads parallel for ops
-  
-  with tf.Session(config = config) as sess:
+  # device config for GPU usage
+  config = tf.ConfigProto(allow_soft_placement=True,
+                          log_device_placement=False,
+                          inter_op_parallelism_threads=1,
+                          intra_op_parallelism_threads=2) # n threads parallel for ops
+  config.gpu_options.allow_growth=True
+
+  with tf.device("/gpu:0"), tf.Session(config = config) as sess:
     # Create model.
     print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
     model = create_model(sess, False)
@@ -203,6 +206,7 @@ def train():
       step_time += (time.time() - start_time) / FLAGS.steps_per_checkpoint
       loss += step_loss / FLAGS.steps_per_checkpoint
       current_step += 1
+      print("current_step %d: loss %s" % (current_step, step_loss))
 
       # Once in a while, we save checkpoint, print statistics, and run evals.
       if current_step % FLAGS.steps_per_checkpoint == 0:

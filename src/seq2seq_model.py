@@ -99,10 +99,12 @@ class Seq2SeqModel(object):
     softmax_loss_function = None
     # Sampled softmax only makes sense if we sample less than vocabulary size.
     if num_samples > 0 and num_samples < self.target_vocab_size:
-      w_t = tf.get_variable("proj_w", [self.target_vocab_size, size], tf.float32)
-      w = tf.transpose(w_t)
-      b = tf.get_variable("proj_b", [self.target_vocab_size], tf.float32)
-      output_projection = (w, b)
+      with tf.device("/gpu:0"):
+        w_t = tf.get_variable("proj_w", [self.target_vocab_size, size], tf.float32)
+        w = tf.transpose(w_t)
+        b = tf.get_variable("proj_b", [self.target_vocab_size], tf.float32)
+        output_projection = (w, b)
+
     
       def sampled_loss(labels, inputs):
         labels = tf.reshape(labels, [-1, 1])
@@ -122,7 +124,8 @@ class Seq2SeqModel(object):
             tf.float32)
       
       softmax_loss_function = sampled_loss
-
+    
+    print("create variables done 1 ...")
     # Create the internal multi-layer cell for our RNN.
     single_cell = tf.contrib.rnn.GRUCell(size)
     if use_lstm:
@@ -130,7 +133,7 @@ class Seq2SeqModel(object):
     cell = single_cell
     if num_layers > 1:
       cell = tf.contrib.rnn.MultiRNNCell([single_cell] * num_layers, state_is_tuple=True)
-    
+    print("create variables done 2 ...")
     # The seq2seq function: we use embedding for the input and attention.
     def seq2seq_f(encoder_inputs, decoder_inputs, do_decode):
       return tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
@@ -143,7 +146,8 @@ class Seq2SeqModel(object):
           output_projection=output_projection,
           feed_previous=do_decode,
           dtype=tf.float32)
-    
+
+    print("create variables done 3 ...")    
     # Feeds for inputs.
     self.encoder_inputs = []
     self.decoder_inputs = []
@@ -156,30 +160,33 @@ class Seq2SeqModel(object):
                                                 name="decoder{0}".format(i)))
       self.target_weights.append(tf.placeholder(tf.float32, shape=[None],
                                                 name="weight{0}".format(i)))
-    
+    print("create variables done 4 ...")
     # Our targets are decoder inputs shifted by one.
     targets = [self.decoder_inputs[i + 1]
                for i in xrange(len(self.decoder_inputs) - 1)]
     
+    print("create variables done 5 ...")
     # Training outputs and losses.
     if forward_only:
-      self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
+        print("create variables done 7 ...")
+        self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets, lambda x, y: seq2seq_f(x, y, True),
           softmax_loss_function=softmax_loss_function)
-      # If we use output projection, we need to project outputs for decoding.
-      if output_projection is not None:
-        for b in xrange(len(buckets)):
-          self.outputs[b] = [
-              tf.matmul(output, output_projection[0]) + output_projection[1]
-              for output in self.outputs[b]
-          ]
+        # If we use output projection, we need to project outputs for decoding.
+        if output_projection is not None:
+            for b in xrange(len(buckets)):
+              self.outputs[b] = [
+                  tf.matmul(output, output_projection[0]) + output_projection[1]
+                  for output in self.outputs[b]
+              ]
     else:
-      self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
+        print("create variables done 8 ...")
+        self.outputs, self.losses = tf.contrib.legacy_seq2seq.model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets, lambda x, y: seq2seq_f(x, y, False),
           softmax_loss_function=softmax_loss_function)
-    
+    print("create variables done 6 ...")
     # Gradients and SGD update operation for training the model.
     params = tf.trainable_variables()
     if not forward_only:
@@ -195,7 +202,8 @@ class Seq2SeqModel(object):
             zip(clipped_gradients, params), global_step=self.global_step))
   
     self.saver = tf.train.Saver(tf.global_variables())  # tf.all_variables() depreciated 
-  
+    
+
   def step(self, session, encoder_inputs, decoder_inputs, target_weights,
            bucket_id, forward_only):
     """Run a step of the model feeding the given inputs.

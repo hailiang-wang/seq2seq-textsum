@@ -165,23 +165,26 @@ class Seq2SeqModel(object):
     
     # Training outputs and losses.
     if forward_only:
-      self.outputs, self.losses, self.attn_masks = seq2seq_attn.model_with_buckets(
+        print("resolve variables 9 ...")
+        self.outputs, self.losses, self.attn_masks = seq2seq_attn.model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets, lambda x, y: seq2seq_f(x, y, True),
           softmax_loss_function=softmax_loss_function)
-      # If we use output projection, we need to project outputs for decoding.
-      if output_projection is not None:
-        for b in xrange(len(buckets)):
-          self.outputs[b] = [
-              tf.matmul(output, output_projection[0]) + output_projection[1]
-              for output in self.outputs[b]
-          ]
+        print("resolve post 9 ...")
+        # If we use output projection, we need to project outputs for decoding.
+        if output_projection is not None:
+            for b in xrange(len(buckets)):
+                self.outputs[b] = [
+                  tf.matmul(output, output_projection[0]) + output_projection[1]
+                  for output in self.outputs[b]
+                ]
     else:
-      self.outputs, self.losses, self.attn_masks = seq2seq_attn.model_with_buckets(
+        print("resolve variables 9 ...")
+        self.outputs, self.losses, self.attn_masks = seq2seq_attn.model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets, lambda x, y: seq2seq_f(x, y, False),
           softmax_loss_function=softmax_loss_function)
-    
+    print("resolve variables done")
     #print ("Attention Config and shapes")
     #print ("Number of buckets in list attn_masks %d " % len(self.attn_masks)) # list of size buckets_num
     #print (len(self.attn_masks[0])) # list of Ty tensor each bucket
