@@ -16,7 +16,7 @@ cd $baseDir/../src
 python run.py \
     --train_dir news/ \
     --vocab_size 10000 \
-    --size 512 \
+    --size 256 \
     --data_path news/train \
     --dev_data news/dev  \
     --vocab_path news/vocab \

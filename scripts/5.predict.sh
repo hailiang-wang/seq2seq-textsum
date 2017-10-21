@@ -12,14 +12,14 @@ baseDir=$(cd `dirname "$0"`;pwd)
 # source /root/venv-py3/bin/activate
 # http://stackoverflow.com/questions/35911252/disable-tensorflow-debugging-information
 export TF_CPP_MIN_LOG_LEVEL=3
-cd $baseDir/..
-python neural_conversation_model.py \
-    --train_dir ubuntu/ \
-    --en_vocab_size 60000 \
-    --size 512 \
-    --data_path ubuntu/train.tsv \
-    --dev_data ubuntu/valid.tsv  \
-    --vocab_path ubuntu/60_chat_vocab.en \
+cd $baseDir/../src
+python run.py \
+    --train_dir news/ \
+    --vocab_size 10000 \
+    --size 256 \
+    --data_path news/train \
+    --dev_data news/dev  \
+    --vocab_path news/vocab \
     --attention \
     --decode \
     --beam_search \

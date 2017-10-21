@@ -1,4 +1,5 @@
-
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 """Most of the code comes from seq2seq tutorial. Binary for training conversation models and decoding from them.
 
@@ -39,8 +40,8 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
                           "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("batch_size", 64,
                             "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("size", 512, "Size of each model layer.")
-tf.app.flags.DEFINE_integer("num_layers", 3, "Number of layers in the model.")
+tf.app.flags.DEFINE_integer("size", 256, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("num_layers", 4, "Number of layers in the model.")
 tf.app.flags.DEFINE_integer("vocab_size", 40000, "vocabulary size.")
 tf.app.flags.DEFINE_string("train_dir", "./tmp/", "Training directory.")
 tf.app.flags.DEFINE_string("vocab_path", "./tmp/", "Data directory")
@@ -50,8 +51,9 @@ tf.app.flags.DEFINE_integer(
     "max_train_data_size",
     0,
     "Limit on the size of training data (0: no limit).")
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 400,
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 2000,
                             "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("num_samples", 2048, "Number of Samples for Sampled softmax")
 tf.app.flags.DEFINE_integer("beam_size", 100,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_boolean("beam_search", False,
@@ -67,8 +69,20 @@ FLAGS = tf.app.flags.FLAGS
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = [(5, 10), (10, 15), (20, 25), (40, 50)]
+# _buckets = [(120, 30), (200, 35), (300, 40), (400, 40), (500, 40)]
+# define less _buckets for headline predict
+_buckets = [(50, 20), (120, 30)]
 
+
+def _slice_text(txt, text_length = 100):
+    '''
+    slicing text length
+    '''
+    o = txt.split()
+    if len(o) < text_length:
+        return " ".join(o)
+    else:
+        return " ".join(o[1:100])
 
 def read_chat_data(data_path, vocabulary_path, max_size=None):
     counter = 0
@@ -77,16 +91,22 @@ def read_chat_data(data_path, vocabulary_path, max_size=None):
     print(max_size)
     data_set = [[] for _ in _buckets]
     # http://stackoverflow.com/questions/33054527/python-3-5-typeerror-a-bytes-like-object-is-required-not-str-when-writing-t
-    with codecs.open(data_path, "rb") as fi:
-        for line in fi.readlines():
-            line = line.decode('utf8').strip()
+    with codecs.open("%s/content.txt" % data_path, "rb") as fc, codecs.open("%s/title.txt" % data_path, "rb") as ft:
+        for (c, t) in zip(fc.readlines(), ft.readlines()):
+            c = c.decode('utf8').strip().lower()
+            t = t.decode('utf8').strip().lower()
+            '''
+            我们截取正文的分词个数到MAX_LENGTH_ENC=100个词，是为了训练的效果正文部分不宜过长。标题部分截取到MIN_LENGTH_ENC = 30，即生成标题不超过30个词。
+            '''
+            c = _slice_text(c, text_length = 100)
+            t = _slice_text(t, text_length = 30)
             counter += 1
             if max_size != 0 and counter > max_size:
                 break
             if counter % 10000 == 0:
                 print("  reading data line %d" % counter)
                 sys.stdout.flush()
-            entities = line.lower().split("\t")
+            entities = [c, t]
             # print entities
             if len(entities) == 2:
                 source = entities[0]
@@ -124,6 +144,7 @@ def create_model(
         FLAGS.batch_size,
         FLAGS.learning_rate,
         FLAGS.learning_rate_decay_factor,
+        num_samples=FLAGS.num_samples,
         forward_only=forward_only,
         beam_search=beam_search,
         beam_size=beam_size,
@@ -141,46 +162,10 @@ def create_model(
         session.run(tf.global_variables_initializer())
     return model
 
-
-def create_models(
-        path,
-        vocab_size,
-        session,
-        forward_only,
-        beam_search,
-        beam_size=10,
-        attention=True):
-    """Create translation model and initialize or load parameters in session."""
-    model = Seq2SeqModel(
-        vocab_size,
-        vocab_size,
-        _buckets,
-        FLAGS.size,
-        FLAGS.num_layers,
-        FLAGS.max_gradient_norm,
-        FLAGS.batch_size,
-        FLAGS.learning_rate,
-        FLAGS.learning_rate_decay_factor,
-        forward_only=forward_only,
-        beam_search=beam_search,
-        beam_size=beam_size,
-        attention=attention)
-    print(FLAGS.train_dir)
-    ckpt = tf.train.get_checkpoint_state(path)
-
-    # ckpt.model_checkpoint_path ="./big_models/chat_bot.ckpt-183600"
-    # print ckpt.model_checkpoint_path
-    if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
-        print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
-        model.saver.restore(session, ckpt.model_checkpoint_path)
-    else:
-        print("Created model with fresh parameters.")
-        session.run(tf.initialize_all_variables())
-    return model
-
-
 def train():
-
+    '''
+    start to train model
+    '''
     data_path = FLAGS.data_path
     dev_data = FLAGS.dev_data
     vocab_path = FLAGS.vocab_path
@@ -191,7 +176,6 @@ def train():
 
     normalize_digits = True
     create_vocabulary(vocab_path, data_path, FLAGS.vocab_size)
-    sys.exit()
 
     with tf.Session() as sess:
         # Create model.
@@ -266,7 +250,7 @@ def train():
                 previous_losses.append(loss)
                 # # Save checkpoint and zero timer and loss.
                 checkpoint_path = os.path.join(
-                    FLAGS.train_dir, "chat_bot.ckpt")
+                    FLAGS.train_dir, "textsum.ckpt")
                 model.saver.save(
                     sess,
                     checkpoint_path,
@@ -312,10 +296,13 @@ def decode():
             sys.stdout.write("> ")
             sys.stdout.flush()
             sentence = sys.stdin.readline()
+
             while sentence:
+                raw_string = tf.compat.as_bytes(sentence)
+                # slicing data
+                sentence = _slice_text(raw_string, text_length = 100)
                 # Get token-ids for the input sentence.
-                token_ids = sentence_to_token_ids(
-                    tf.compat.as_bytes(sentence), vocab)
+                token_ids = sentence_to_token_ids(sentence, vocab)
                 # Which bucket does it belong to?
                 bucket_id = min([b for b in xrange(len(_buckets))
                                  if _buckets[b][0] > len(token_ids)])
