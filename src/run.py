@@ -53,7 +53,7 @@ tf.app.flags.DEFINE_integer(
     "Limit on the size of training data (0: no limit).")
 tf.app.flags.DEFINE_integer("steps_per_checkpoint", 2000,
                             "How many training steps to do per checkpoint.")
-tf.app.flags.DEFINE_integer("num_samples", 2048, "Number of Samples for Sampled softmax")
+tf.app.flags.DEFINE_integer("num_samples", 1096, "Number of Samples for Sampled softmax")
 tf.app.flags.DEFINE_integer("beam_size", 100,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_boolean("beam_search", False,
@@ -71,7 +71,7 @@ FLAGS = tf.app.flags.FLAGS
 # See seq2seq_model.Seq2SeqModel for details of how they work.
 # _buckets = [(120, 30), (200, 35), (300, 40), (400, 40), (500, 40)]
 # define less _buckets for headline predict
-_buckets = [(50, 20), (120, 30)]
+_buckets = [(50, 20), (120, 30), (300, 30), (400, 30)]
 
 
 def _slice_text(txt, text_length = 100):
@@ -98,8 +98,8 @@ def read_chat_data(data_path, vocabulary_path, max_size=None):
             '''
             我们截取正文的分词个数到MAX_LENGTH_ENC=100个词，是为了训练的效果正文部分不宜过长。标题部分截取到MIN_LENGTH_ENC = 30，即生成标题不超过30个词。
             '''
-            c = _slice_text(c, text_length = 100)
-            t = _slice_text(t, text_length = 30)
+            # c = _slice_text(c, text_length = 100)
+            # t = _slice_text(t, text_length = 30)
             counter += 1
             if max_size != 0 and counter > max_size:
                 break
